@@ -66,16 +66,20 @@ class R9DS
     float throttle = 0.0f;
   };
 
-  R9DS(LibXR::UART& external_sbus_uart, LibXR::RamFS& external_ramfs,
-       const char* data_topic_name, const char* rc_state_topic_name,
-       uint32_t signal_timeout_ms, size_t task_stack_depth)
+  R9DS(
+      LibXR::UART& uart,
+      LibXR::RamFS& ramfs,
+      const char* data_topic_name = "r9ds_data",
+      const char* rc_state_topic_name = "rc_state",
+      uint32_t signal_timeout_ms = 50,
+      size_t task_stack_depth = 1024)
       : signal_timeout_ms_(signal_timeout_ms),
         data_topic_(LibXR::Topic::CreateTopic<Data>(data_topic_name)),
         rc_topic_(LibXR::Topic::CreateTopic<State>(rc_state_topic_name, nullptr, true)),
-        uart_(std::addressof(external_sbus_uart)),
+        uart_(std::addressof(uart)),
         cmd_file_(LibXR::RamFS::CreateFile("r9ds", CommandFunc, this))
   {
-    external_ramfs.Add(cmd_file_);
+    ramfs.Add(cmd_file_);
 
     auto ans = uart_->SetConfig({100000, LibXR::UART::Parity::EVEN, 8, 2});
     ASSERT(ans == LibXR::ErrorCode::OK);
