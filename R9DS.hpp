@@ -22,50 +22,94 @@ depends: []
 #include "timebase.hpp"
 #include "uart.hpp"
 
+/**
+ * @brief RadioLink R9DS SBUS 接收机驱动，解析 SBUS 帧并发布通道数据与 RC 状态。
+ *        Driver for the RadioLink R9DS SBUS receiver; parses SBUS frames and publishes
+ *        the channel data and the RC state.
+ */
 class R9DS
 {
  public:
-  static constexpr size_t CHANNEL_COUNT_DEF = 10;
-  static constexpr size_t RC_CHANNEL_COUNT_DEF = 8;
+  static constexpr size_t CHANNEL_COUNT_DEF = 10;    ///< 解析的通道数 Parsed channels
+  static constexpr size_t RC_CHANNEL_COUNT_DEF = 8;  ///< RC 状态通道数 RC state channels
 
+  /**
+   * @brief 由 `channels[4]` 决定的飞行模式。
+   *        Flight mode selected by `channels[4]`.
+   */
   enum class FlightMode : uint8_t
   {
-    ATT_STAB = 0,
-    LOC_HOLD = 1,
-    RETURN_HOME = 2,
+    ATT_STAB = 0,     ///< `channels[4]` < -300
+    LOC_HOLD = 1,     ///< -300 <= `channels[4]` < 200
+    RETURN_HOME = 2,  ///< `channels[4]` >= 200
   };
 
+  /**
+   * @brief 由 `channels[5]` 决定的辅助模式，无信号时为 MODE0。
+   *        Auxiliary mode selected by `channels[5]`; MODE0 when there is no signal.
+   */
   enum class FlightMode2 : uint8_t
   {
-    MODE0 = 0,
-    MODE1 = 1,
-    MODE2 = 2,
+    MODE0 = 0,  ///< `channels[5]` < -300
+    MODE1 = 1,  ///< -300 <= `channels[5]` < 200
+    MODE2 = 2,  ///< `channels[5]` >= 200
   };
 
+  /**
+   * @brief 解析出的通道数据，由数据 Topic 发布。
+   *        Parsed channel data published on the data Topic.
+   */
   struct Data
   {
-    std::array<int16_t, CHANNEL_COUNT_DEF> channels_us = {};
-    uint16_t signal_frequency_hz = 0;
-    uint8_t flags = 0;
-    bool fail_safe = true;
-    bool no_signal = true;
+    std::array<int16_t, CHANNEL_COUNT_DEF> channels_us = {};  ///< 通道值，µs
+    ///< Channels in µs
+    uint16_t signal_frequency_hz = 0;  ///< 最近 1 s 的有效帧数
+    ///< Good frames in the last 1 s
+    uint8_t flags = 0;      ///< SBUS 标志字节 SBUS flag byte
+    bool fail_safe = true;  ///< failsafe 标志 Failsafe flag
+    bool no_signal = true;  ///< 超时无有效帧 No good frame within the timeout
   };
 
+  /**
+   * @brief 由通道数据换算的 RC 状态，由 RC 状态 Topic 发布。
+   *        RC state derived from the channel data, published on the RC state Topic.
+   */
   struct State
   {
+    /// 通道值减 1500，-500 到 500
+    /// Channels minus 1500, -500 to 500
     std::array<int16_t, RC_CHANNEL_COUNT_DEF> channels = {};
-    std::array<uint16_t, RC_CHANNEL_COUNT_DEF> raw_us = {};
-    bool fail_safe = true;
-    bool no_signal = true;
-    bool throttle_low = true;
-    FlightMode flight_mode = FlightMode::ATT_STAB;
-    FlightMode2 flight_mode2 = FlightMode2::MODE0;
-    float roll = 0.0f;
-    float pitch = 0.0f;
-    float yaw = 0.0f;
-    float throttle = 0.0f;
+    std::array<uint16_t, RC_CHANNEL_COUNT_DEF> raw_us = {};  ///< 通道值，µs
+    ///< Channels in µs
+    bool fail_safe = true;     ///< failsafe 标志 Failsafe flag
+    bool no_signal = true;     ///< 超时无有效帧 No good frame within the timeout
+    bool throttle_low = true;  ///< 油门通道低于 -350 Throttle channel below -350
+    FlightMode flight_mode = FlightMode::ATT_STAB;  ///< 飞行模式 Flight mode
+    FlightMode2 flight_mode2 = FlightMode2::MODE0;  ///< 辅助模式 Auxiliary mode
+    float roll = 0.0f;                              ///< 横滚，-1 到 1 Roll, -1 to 1
+    float pitch = 0.0f;                             ///< 俯仰，-1 到 1 Pitch, -1 to 1
+    float yaw = 0.0f;                               ///< 偏航，-1 到 1 Yaw, -1 to 1
+    float throttle = 0.0f;                          ///< 油门，0 到 1 Throttle, 0 to 1
   };
 
+  /**
+   * @brief 构造 R9DS：把 UART 设为 SBUS 参数，注册 `r9ds` 命令并创建接收线程。
+   *        Construct R9DS: set the UART to the SBUS parameters, register the `r9ds`
+   *        command and create the receive thread.
+   *
+   * @param uart 连接接收机 SBUS 输出的 UART。
+   *             UART connected to the SBUS output of the receiver.
+   * @param ramfs 接收 `r9ds` 命令的 RamFS。
+   *              RamFS that receives the `r9ds` command.
+   * @param data_topic_name 通道数据 Topic 名称。
+   *                        Name of the channel data Topic.
+   * @param rc_state_topic_name RC 状态 Topic 名称。
+   *                            Name of the RC state Topic.
+   * @param signal_timeout_ms 没有有效帧多久后置位 no_signal，单位 ms。
+   *                          Time without a good frame before no_signal is set, in ms.
+   * @param task_stack_depth 接收线程栈深。
+   *                         Stack depth of the receive thread.
+   */
   R9DS(
       LibXR::UART& uart,
       LibXR::RamFS& ramfs,
@@ -88,6 +132,10 @@ class R9DS
                    LibXR::Thread::Priority::HIGH);
   }
 
+  /**
+   * @brief 监控回调：no_signal 置位期间输出告警。
+   *        Monitor callback: log a warning while no_signal is set.
+   */
   void OnMonitor()
   {
     if (data_.no_signal)
