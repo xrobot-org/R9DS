@@ -125,7 +125,10 @@ class R9DS
   {
     ramfs.Add(cmd_file_);
 
-    auto ans = uart_->SetConfig({100000, LibXR::UART::Parity::EVEN, 8, 2});
+    auto ans = uart_->SetConfig({.baudrate = 100000,
+                                 .parity = LibXR::UART::Parity::EVEN,
+                                 .data_bits = 8,
+                                 .stop_bits = 2});
     ASSERT(ans == LibXR::ErrorCode::OK);
 
     thread_.Create(this, ThreadFunc, "r9ds_thread", task_stack_depth,
