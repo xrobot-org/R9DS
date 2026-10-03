@@ -116,7 +116,7 @@ An instance written by `xrobot instance add xrobot-org/R9DS`, with `uart` and `r
 ```yaml
 modules:
   - module: xrobot-org/R9DS
-    id: r9ds
+    id: r9ds_0
     args:
       - uart: usart1
       - ramfs: ramfs
