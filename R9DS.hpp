@@ -2,7 +2,7 @@
 
 // clang-format off
 /* === MODULE MANIFEST V2 ===
-module_description: XRobot Module for RadioLink R9DS SBUS receiver
+module_description: RadioLink R9DS SBUS 接收机驱动模块 / Driver module for the RadioLink R9DS SBUS receiver
 depends: []
 === END MANIFEST === */
 // clang-format on
