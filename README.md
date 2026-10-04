@@ -1,6 +1,6 @@
 # R9DS
 
-RadioLink R9DS SBUS 接收机驱动模块 / Driver module for the RadioLink R9DS SBUS receiver
+RadioLink R9DS SBUS 接收机驱动模块 / Driver Module for the RadioLink R9DS SBUS receiver
 
 ## 1. 模块作用 / Purpose
 
@@ -11,13 +11,13 @@ RadioLink R9DS SBUS 接收机驱动模块 / Driver module for the RadioLink R9DS
 - 无 failsafe 的帧计为有效帧，`signal_frequency_hz` 为最近 1 s 窗口内的有效帧数。连续 `signal_timeout_ms` 没有有效帧时置位 `no_signal`；UART 在该时间内无数据时，模块清零通道、置位 failsafe 并发布一次。
 - 每个有效帧同时发布两个 Topic。
 
-`OnMonitor()` 在 `no_signal` 置位期间输出告警。
+`OnMonitor()` 在 `no_signal` 置位期间输出警告。
 
 Upon construction, R9DS sets the UART to 100000 baud, 8 data bits, even parity, 2 stop bits (`ASSERT` on failure) and creates the thread `r9ds_thread` (`HIGH` priority, stack depth `task_stack_depth`). The thread reads the UART byte by byte:
 
 - A gap of more than 2.5 ms between bytes restarts the frame. A 25-byte frame is valid when it starts with `0x0F` and ends with `0x00` or the next expected value of the `0x04, 0x14, 0x24, 0x34` sequence; otherwise the buffer shifts by one byte.
 - The first 10 channels are converted to microseconds: `0.644 * (raw - 1024) + 1500`. Bit `0x08` of the flag byte is failsafe.
-- Frames without failsafe count as good frames, and `signal_frequency_hz` is the number of good frames in the last 1 s window. `no_signal` is set when no good frame has arrived for `signal_timeout_ms`; if the UART stays silent for that long, the module clears the channels, sets failsafe and publishes once.
+- Frames without failsafe count as good frames, and `signal_frequency_hz` is the number of good frames in the last 1 s window. `no_signal` is set when no good frame has arrived for `signal_timeout_ms`; if the UART stays silent for that long, the Module clears the channels, sets failsafe and publishes once.
 - Every valid frame publishes both Topics.
 
 `OnMonitor()` logs a warning while `no_signal` is set.
@@ -52,14 +52,17 @@ Upon construction, R9DS sets the UART to 100000 baud, 8 data bits, even parity, 
 
 ## 3. Shell 命令 / Shell Command
 
-模块向 `ramfs` 添加命令 `r9ds`，`interval_ms` 限制在 10 到 1000：
+模块向 `ramfs` 添加命令 `r9ds`，`interval_ms` 限制在 10 到 1000 ms：
 
-```sh
-r9ds show <time_ms> <interval_ms>     # 10 个通道微秒值、频率、标志、failsafe、no_signal / 10 channels in µs, frequency, flags, failsafe, no_signal
-r9ds show_rc <time_ms> <interval_ms>  # 8 个归一化通道、飞行模式、failsafe、no_signal / 8 normalized channels, flight modes, failsafe, no_signal
-```
+- `r9ds`：打印用法。
+- `r9ds show <time_ms> <interval_ms>`：打印 10 个通道的微秒值、频率、标志、failsafe 与 no_signal。
+- `r9ds show_rc <time_ms> <interval_ms>`：打印 8 个归一化通道、飞行模式、failsafe 与 no_signal。
 
-The module adds the command `r9ds` to `ramfs`; `interval_ms` is clamped to 10 to 1000.
+The Module adds the command `r9ds` to `ramfs`; `interval_ms` is clamped to 10 to 1000 ms:
+
+- `r9ds`: print the usage.
+- `r9ds show <time_ms> <interval_ms>`: print the 10 channels in µs, the frequency, the flags, failsafe and no_signal.
+- `r9ds show_rc <time_ms> <interval_ms>`: print the 8 normalized channels, the flight modes, failsafe and no_signal.
 
 ## 4. 构造接口 / Constructor
 
@@ -81,7 +84,7 @@ R9DS(LibXR::UART& uart, LibXR::RamFS& ramfs,
 - `data_topic_name`：`R9DS::Data` Topic 的名称，默认 `r9ds_data`。
 - `rc_state_topic_name`：`R9DS::State` Topic 的名称，默认 `rc_state`。
 - `signal_timeout_ms`：没有有效帧多久后置位 `no_signal`，单位 ms，默认 50。
-- `task_stack_depth`：接收线程栈深，默认 1024。
+- `task_stack_depth`：接收线程栈深，单位字节，默认 1024。
 
 Dependencies:
 
@@ -93,16 +96,16 @@ Configuration parameters:
 - `data_topic_name`: name of the `R9DS::Data` Topic, default `r9ds_data`.
 - `rc_state_topic_name`: name of the `R9DS::State` Topic, default `rc_state`.
 - `signal_timeout_ms`: time without a good frame before `no_signal` is set, in ms, default 50.
-- `task_stack_depth`: stack depth of the receive thread, default 1024.
+- `task_stack_depth`: stack depth of the receive thread in bytes, default 1024.
 
 ## 5. Topic
 
-| Topic（默认名称） | 方向 | 类型 | 说明 |
+| Topic | 方向 | 类型 | 说明 |
 | --- | --- | --- | --- |
 | `data_topic_name`（默认 `r9ds_data`） | 发布 | `R9DS::Data` | `channels_us`（10 个通道，µs）、`signal_frequency_hz`、`flags`、`fail_safe`、`no_signal` |
 | `rc_state_topic_name`（默认 `rc_state`） | 发布 | `R9DS::State` | 由 `Data` 换算的 RC 状态，字段见第 2 节 |
 
-| Topic (default name) | Direction | Type | Meaning |
+| Topic | Direction | Type | Meaning |
 | --- | --- | --- | --- |
 | `data_topic_name` (default `r9ds_data`) | Publish | `R9DS::Data` | `channels_us` (10 channels, µs), `signal_frequency_hz`, `flags`, `fail_safe`, `no_signal` |
 | `rc_state_topic_name` (default `rc_state`) | Publish | `R9DS::State` | RC state derived from `Data`, fields in section 2 |
@@ -111,7 +114,7 @@ Configuration parameters:
 
 `xrobot instance add xrobot-org/R9DS` 写入的实例，`uart` 与 `ramfs` 填写为 BSP 通过 `XR_REGISTER`（硬件注册）注册的名称：
 
-An instance written by `xrobot instance add xrobot-org/R9DS`, with `uart` and `ramfs` set to names registered by the BSP's `XR_REGISTER` (Registration):
+An instance written by `xrobot instance add xrobot-org/R9DS`, with `uart` and `ramfs` set to names registered by the BSP with `XR_REGISTER` (Registration):
 
 ```yaml
 modules:
